@@ -372,7 +372,26 @@
                   (values t char reader-fn nil nil))))))
         #'grovel-base-chars))))
 
-#-(or sbcl clozure allegro cmucl)
+#+egcl
+(defun %make-readtable-iterator (readtable)
+  (let ((entries nil))
+    (egcl-ext:map-readtable-macro-characters
+     (lambda (char reader-function non-terminating-p dispatch-alist)
+       (declare (ignore non-terminating-p))
+       (let ((dispatch-p
+               (or dispatch-alist
+                   (handler-case
+                       (progn (get-dispatch-macro-character char #\0 readtable) t)
+                     (error () nil)))))
+         (push (list char reader-function (not (null dispatch-p)) dispatch-alist)
+               entries)))
+     readtable)
+    (setf entries (nreverse entries))
+    (lambda ()
+      (when entries
+        (values-list (cons t (pop entries)))))))
+
+#-(or sbcl clozure allegro cmucl egcl)
 (eval-when (:compile-toplevel)
   (let ((*print-pretty* t))
     (simple-style-warn
@@ -382,7 +401,7 @@
        On Unicode-aware implementations this may come with some costs.~@:>"
      (package-name '#.*package*) (lisp-implementation-type))))
 
-#-(or sbcl clozure allegro cmucl)
+#-(or sbcl clozure allegro cmucl egcl)
 (defun %make-readtable-iterator (readtable)
   (check-type readtable readtable)
   (let ((char-code 0))
